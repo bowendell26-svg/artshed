@@ -1,0 +1,58 @@
+{# ========================================== #}
+{# 1. LAYOUT EXTENSION AT MACRO IMPORTS #}
+{# ========================================== #}
+{% extends "base.html" %}
+{% from "macros.html" import field %}
+
+{% block title %}First-time setup | Kidapawan City Visual Artists{% endblock %}
+
+{# ========================================== #}
+{# 2. MAIN CONTENT SECTION #}
+{# ========================================== #}
+{% block content %}
+<section class="mx-auto max-w-xl px-5 py-16 sm:py-24">
+
+  <p class="text-xs font-semibold uppercase tracking-widest text-brass">First-time setup</p>
+
+  <h1 class="mt-2 font-display text-3xl text-white">
+    Create the admin account
+  </h1>
+
+  <p class="mt-2 text-neutral-400">
+    Wala pang admin account sa site na ito. Gumawa ng isa ngayon para ma-unlock ang admin dashboard.
+    Kapag may admin na, awtomatikong nawawala ang page na ito.
+  </p>
+
+  {# ========================================== #}
+  {# 3. SETUP FORM #}
+  {# ========================================== #}
+  <form method="post"
+    class="mt-8 space-y-5 rounded-lg bg-neutral-900/90 p-6 ring-1 ring-white/10 transition-all duration-300 hover:-translate-y-1 hover:ring-[#acb2b5]/40 hover:shadow-[0_12px_30px_rgba(0,0,0,0.6),0_0_20px_rgba(172,178,181,0.12)]">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+
+    {{ field('name', 'Full name', 'text', form.get('name',''), True, 'name', '', errors.get('name','')) }}
+
+    {{ field('email', 'Email', 'email', form.get('email',''), True, 'email', '', errors.get('email','')) }}
+
+    <div class="grid gap-5 sm:grid-cols-2">
+      {{ field('password', 'Password', 'password', '', True, 'new-password',
+      'At least 8 characters.', errors.get('password','')) }}
+
+      {{ field('confirm', 'Confirm password', 'password', '', True, 'new-password', '',
+      errors.get('confirm','')) }}
+    </div>
+
+    <button type="submit"
+      class="w-full rounded-sm bg-[#acb2b5] px-6 py-3 font-semibold text-neutral-950 transition-all duration-200 hover:bg-[#c9ced1] hover:scale-[1.01] active:scale-95 shadow-md hover:shadow-[0_0_20px_rgba(172,178,181,0.25)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white">
+      Create admin account
+    </button>
+
+  </form>
+
+  <p class="mt-6 text-sm text-neutral-400">
+    May account ka na? Ilagay ang email at <span class="text-white">kasalukuyang password</span> ng account na
+    iyon sa form sa itaas at ito ang gagawing admin.
+  </p>
+
+</section>
+{% endblock %}

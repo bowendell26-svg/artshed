@@ -706,6 +706,19 @@ def block_suspended_accounts():
         return redirect(url_for("home"))
 
 
+def admin_exists():
+    return Artist.query.filter_by(is_admin=True).count() > 0
+
+
+@app.before_request
+def require_initial_setup():
+    """Dadalhin sa /setup ang lahat ng bisita hangga't wala pang admin account."""
+    if request.endpoint in ("setup", "static"):
+        return
+    if not admin_exists():
+        return redirect(url_for("setup"))
+
+
 @app.cli.command("make-admin")
 @click.argument("email")
 def make_admin(email):
@@ -1285,6 +1298,71 @@ def search():
             show_in_directory=True, suspended=False,
         ).filter(Artist.name.ilike(pattern)).order_by(Artist.name).limit(50).all())
     return render_template("search.html", query=query, paintings=paintings, artists=artists)
+
+
+@app.route("/setup", methods=["GET", "POST"])
+def setup():
+    """First-run setup: gumagawa (o nagpo-promote) ng unang admin account."""
+    if admin_exists():
+        flash("Setup is already complete. Please log in.", "info")
+        return redirect(url_for("artist_login"))
+
+    form = request.form if request.method == "POST" else {"name": "", "email": ""}
+    errors = {}
+    if request.method == "POST":
+        name = form.get("name", "").strip()
+        email = form.get("email", "").strip().lower()
+        password = form.get("password", "")
+
+        if not 2 <= len(name) <= 80:
+            errors["name"] = "Enter a name between 2 and 80 characters."
+        if not EMAIL_RE.fullmatch(email) or len(email) > 120:
+            errors["email"] = "Enter a valid email address."
+        if len(password) < 8:
+            errors["password"] = "Password must be at least 8 characters."
+        elif password != form.get("confirm", ""):
+            errors["confirm"] = "Passwords do not match."
+
+        account = None
+        if not errors:
+            account = Artist.query.filter(db.func.lower(Artist.email) == email).first()
+            if account and not check_password_hash(account.password_hash, password):
+                errors["email"] = (
+                    "An account already uses this email. Enter its current password "
+                    "in the password field to make it the admin."
+                )
+
+        if not errors:
+            if account is None:
+                account = Artist(
+                    name=name,
+                    email=email,
+                    password_hash=generate_password_hash(password),
+                    account_type="artist",
+                    is_approved=True,
+                    is_admin=True,
+                    show_in_directory=False,
+                )
+                db.session.add(account)
+            else:
+                account.is_admin = True
+                account.suspended = False
+                if account.account_type == "artist":
+                    account.is_approved = True
+                    account.show_in_directory = False
+            try:
+                db.session.commit()
+            except IntegrityError:
+                db.session.rollback()
+                errors["email"] = "This email is already in use. Try a different one."
+            else:
+                login_user(account)
+                flash("Admin account created. You are now signed in.", "success")
+                return redirect(url_for("admin_dashboard"))
+
+        flash("Please fix the highlighted fields.", "error")
+        return render_template("setup.html", form=form, errors=errors), 400
+    return render_template("setup.html", form=form, errors=errors)
 
 
 @app.route("/register", methods=["GET", "POST"])
