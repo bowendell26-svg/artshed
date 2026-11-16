@@ -5,6 +5,7 @@ import hashlib
 import os
 import re
 import secrets
+import time
 import uuid
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
@@ -71,7 +72,7 @@ class Artist(UserMixin, db.Model):
     bio = db.Column(db.Text, default="")
     sample_artworks = db.Column(db.Text, default="")  # Comma-separated filenames para sa portfolio/sample works
     account_type = db.Column(db.String(20), nullable=False, default="artist", server_default="artist")
-    is_approved = db.Column(db.Boolean, nullable=False, default=False, server_default=db.text("false"))
+    is_approved = db.Column(db.Boolean, nullable=False, default=False, server_default=db.text("false"), index=True)
     avatar = db.Column(db.String(120))
     cover_photo = db.Column(db.String(120))
     
@@ -79,7 +80,7 @@ class Artist(UserMixin, db.Model):
     show_member_since = db.Column(db.Boolean, nullable=False, default=True, server_default=db.text("true"))
     notify_new_orders = db.Column(db.Boolean, nullable=False, default=True, server_default=db.text("true"))
     
-    is_admin = db.Column(db.Boolean, nullable=False, default=False, server_default=db.text("false"))
+    is_admin = db.Column(db.Boolean, nullable=False, default=False, server_default=db.text("false"), index=True)
     suspended = db.Column(db.Boolean, nullable=False, default=False, server_default=db.text("false"))
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     
@@ -119,15 +120,15 @@ class Artwork(db.Model):
     image = db.Column(db.String(120))
     available = db.Column(db.Boolean, default=True)
     price = db.Column(db.Integer)
-    views = db.Column(db.Integer, default=0, nullable=False, server_default=db.text("0"))
+    views = db.Column(db.Integer, default=0, nullable=False, server_default=db.text("0"), index=True)
     
     style = db.Column(db.String(50), default="figurative")
     subject = db.Column(db.String(50), default="landscape")
     medium = db.Column(db.String(50), default="oil")
     
-    hidden = db.Column(db.Boolean, nullable=False, default=False, server_default=db.text("false"))
+    hidden = db.Column(db.Boolean, nullable=False, default=False, server_default=db.text("false"), index=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-    artist_id = db.Column(db.Integer, db.ForeignKey("artist.id"), nullable=False)
+    artist_id = db.Column(db.Integer, db.ForeignKey("artist.id"), nullable=False, index=True)
 
     @property
     def artist_name(self):
@@ -285,8 +286,8 @@ class Comment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     content = db.Column(db.Text, nullable=False)
     timestamp = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
-    post_id = db.Column(db.Integer, db.ForeignKey('community_post.id'), nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey('artist.id'), nullable=False)
+    post_id = db.Column(db.Integer, db.ForeignKey('community_post.id'), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('artist.id'), nullable=False, index=True)
     user = db.relationship('Artist', backref=db.backref('comments', lazy=True, cascade="all, delete-orphan"))
 
 
@@ -294,8 +295,8 @@ class Like(db.Model):
     __tablename__ = 'like'
     id = db.Column(db.Integer, primary_key=True)
     reaction_type = db.Column(db.String(20), default='like')
-    post_id = db.Column(db.Integer, db.ForeignKey('community_post.id'), nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey('artist.id'), nullable=False)
+    post_id = db.Column(db.Integer, db.ForeignKey('community_post.id'), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('artist.id'), nullable=False, index=True)
     __table_args__ = (db.UniqueConstraint('user_id', 'post_id', name='unique_user_post_reaction'),)
 
 
@@ -406,6 +407,22 @@ with app.app_context():
         "CREATE INDEX IF NOT EXISTS ix_conversation_participant_artist_id "
         "ON conversation (participant_artist_id)"
     ))
+    db.session.commit()
+
+    # Indexes para sa mga filter/join/order na tumatakbo sa bawat page load.
+    # Ang `like` ay reserved word sa SQL kaya kailangang i-quote.
+    for statement in (
+        "CREATE INDEX IF NOT EXISTS ix_artist_is_approved ON artist (is_approved)",
+        "CREATE INDEX IF NOT EXISTS ix_artist_is_admin ON artist (is_admin)",
+        "CREATE INDEX IF NOT EXISTS ix_artwork_artist_id ON artwork (artist_id)",
+        "CREATE INDEX IF NOT EXISTS ix_artwork_views ON artwork (views)",
+        "CREATE INDEX IF NOT EXISTS ix_artwork_hidden ON artwork (hidden)",
+        "CREATE INDEX IF NOT EXISTS ix_comment_post_id ON comment (post_id)",
+        "CREATE INDEX IF NOT EXISTS ix_comment_user_id ON comment (user_id)",
+        'CREATE INDEX IF NOT EXISTS ix_like_post_id ON "like" (post_id)',
+        'CREATE INDEX IF NOT EXISTS ix_like_user_id ON "like" (user_id)',
+    ):
+        db.session.execute(db.text(statement))
     db.session.commit()
 
 
@@ -589,8 +606,18 @@ def inject_counts():
     return {"pending_orders": 0, "unread_notifications": 0, "unread_messages": 0}
 
 
+CATEGORY_CACHE_SECONDS = 60
+_category_cache = {"expires_at": 0.0, "values": None}
+
+
 @app.context_processor
 def inject_dynamic_categories():
+    # Dati, ang mabigat na UNION query na ito ay tumatakbo sa BAWAT page load,
+    # kahit hindi naka-log in. Naka-cache na ngayon nang 60 segundo.
+    now = time.monotonic()
+    if _category_cache["values"] is not None and now < _category_cache["expires_at"]:
+        return _category_cache["values"]
+
     visible_artwork_filters = (
         Artwork.hidden.is_(False),
         Artist.is_approved.is_(True),
@@ -624,11 +651,14 @@ def inject_dynamic_categories():
         if value:
             values_by_category[category].add(value.title())
 
-    return {
+    values = {
         "dynamic_styles": sorted(values_by_category["style"]),
         "dynamic_subjects": sorted(values_by_category["subject"]),
         "dynamic_mediums": sorted(values_by_category["medium"]),
     }
+    _category_cache["values"] = values
+    _category_cache["expires_at"] = time.monotonic() + CATEGORY_CACHE_SECONDS
+    return values
 
 
 @app.template_filter("ph_time")

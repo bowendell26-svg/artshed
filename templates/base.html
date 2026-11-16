@@ -18,21 +18,9 @@
   <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600&family=Young+Serif&display=swap"
     rel="stylesheet" />
 
-  {# Tailwind CSS CDN Script #}
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          fontFamily: {
-            display: ['"Young Serif"', "Georgia", "serif"],
-            sans: ["Figtree", "ui-sans-serif", "system-ui", "sans-serif"],
-          },
-          colors: { brass: "#acb2b5" },
-        },
-      },
-    };
-  </script>
+  {# Precompiled Tailwind CSS. Kapag may bagong utility class, buuin muli:
+     tingnan ang build command sa tailwind.config.js #}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/tailwind.css') }}?v=1">
 
   <!-- Macros CSS -->
   <link rel="stylesheet" href="{{ url_for('static', filename='css/macros.css') }}?v=3">

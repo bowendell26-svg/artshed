@@ -1,0 +1,5 @@
+/* Source file para sa build ng Tailwind. Huwag i-link ito sa HTML —
+   static/css/tailwind.css ang aktwal na ginagamit ng app. */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
