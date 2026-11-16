@@ -1,0 +1,93 @@
+{# ========================================== #}
+{# 1. LAYOUT EXTENSION AT MACRO IMPORTS #}
+{# ========================================== #}
+{# Iminamanahin ang pangkalahatang anyo mula sa account_layout.html at inaangkat ang field macro #}
+{% extends "account_layout.html" %}
+{% from "macros.html" import field %}
+
+{% block styles %}
+{{ super() }}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/settings.css') }}?v=4">
+{% endblock %}
+
+{# Pagtatakda ng pamagat ng pahina sa tab ng browser #}
+{% block title %}Settings | Kidapawan City Visual Artists{% endblock %}
+
+{# ========================================== #}
+{# 2. MAIN PANEL CONTENT SECTION #}
+{# ========================================== #}
+{% block panel %}
+
+<div class="settings-page">
+  <header class="settings-header">
+    <h1>Settings</h1>
+    <p>Manage your sign-in details and keep your account secure.</p>
+  </header>
+
+
+  {# ========================================== #}
+  {# 3. UPDATE EMAIL FORM #}
+  {# ========================================== #}
+  <form method="post" class="settings-card">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+
+    <input type="hidden" name="action" value="email" />
+
+    <div class="settings-card-heading">
+      <div>
+        <h2>Email address</h2>
+        <p>Your current email is <span>{{ current_user.email }}</span>. It is never shown on the site.</p>
+      </div>
+      <span class="settings-step">01</span>
+    </div>
+
+    <div class="settings-fields">
+      {{ field('new_email', 'New email', 'email', form.get('new_email','') if form.get('action') == 'email' else '', True,
+      'email', '', errors.get('new_email','')) }}
+
+      {{ field('email_password', 'Current password', 'password', '', True, 'current-password', 'Enter your password to
+      confirm the change.', errors.get('email_password','')) }}
+    </div>
+
+    <button class="settings-submit">
+      Update email
+    </button>
+  </form>
+
+
+  {# ========================================== #}
+  {# 4. CHANGE PASSWORD FORM #}
+  {# ========================================== #}
+  <form method="post" class="settings-card">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+
+    <input type="hidden" name="action" value="password" />
+
+    <div class="settings-card-heading">
+      <div>
+        <h2>Change password</h2>
+        <p>Use a unique password with at least 8 characters.</p>
+      </div>
+      <span class="settings-step">02</span>
+    </div>
+
+    <div class="settings-fields">
+      {{ field('current_password', 'Current password', 'password', '', True, 'current-password', '',
+      errors.get('current_password','')) }}
+
+      <div class="settings-password-grid">
+        {{ field('new_password', 'New password', 'password', '', True, 'new-password', 'At least 8 characters.',
+        errors.get('new_password','')) }}
+
+        {{ field('confirm_password', 'Confirm new password', 'password', '', True, 'new-password', '',
+        errors.get('confirm_password','')) }}
+      </div>
+    </div>
+
+    <button class="settings-submit">
+      Change password
+    </button>
+  </form>
+</div>
+
+{% endblock %}
