@@ -8,7 +8,7 @@
 }
 
 .artist-header-container {
-    max-width: none;
+    max-width: 72rem;
     margin-left: auto;
     margin-right: auto;
     padding-left: 1rem;
@@ -201,7 +201,7 @@
 
 /* Artworks Gallery Section */
 .artist-gallery-section {
-    max-width: none;
+    max-width: 72rem;
     margin-left: auto;
     margin-right: auto;
     padding-left: 1rem;

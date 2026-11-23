@@ -48,7 +48,7 @@
   {# 3. HEADER AT NAVIGATION BAR #}
   {# ========================================== #}
   <header class="sticky top-0 z-30 border-b border-white/10 bg-neutral-950/95 backdrop-blur">
-    <div class="mx-auto w-full max-w-none px-4 py-3 sm:px-5 lg:px-6">
+    <div class="mx-auto w-full max-w-6xl px-4 py-3 sm:px-5 lg:px-6">
 
       {# A. Logo at History Buttons #}
       <div class="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
@@ -342,7 +342,7 @@
   {# 4. FLASH MESSAGES SECTION #}
   {# ========================================== #}
   {% with messages = get_flashed_messages(with_categories=true) %}
-  <div id="flash-messages" class="mx-auto w-full max-w-none space-y-2 px-4 pt-6 sm:px-5 lg:px-6 {{ 'hidden' if not messages }}"
+  <div id="flash-messages" class="mx-auto w-full max-w-6xl space-y-2 px-4 pt-6 sm:px-5 lg:px-6 {{ 'hidden' if not messages }}"
     role="status" aria-live="polite">
     {% for cat, msg in messages %}
     <p
@@ -366,7 +366,7 @@
   {# 6. FOOTER SECTION #}
   {# ========================================== #}
   <footer class="border-t border-white/10">
-    <p class="mx-auto w-full max-w-none px-4 py-6 text-sm text-neutral-400 sm:px-5 lg:px-6">
+    <p class="mx-auto w-full max-w-6xl px-4 py-6 text-sm text-neutral-400 sm:px-5 lg:px-6">
       Kidapawan City Visual Artists.
     </p>
   </footer>
