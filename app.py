@@ -12,6 +12,7 @@ from zoneinfo import ZoneInfo
 from functools import wraps
 
 import click
+from dotenv import load_dotenv
 from flask import Flask, abort, flash, redirect, render_template, request, url_for
 from flask_login import (LoginManager, UserMixin, current_user, login_required,
                          login_user, logout_user)
@@ -22,13 +23,33 @@ from sqlalchemy.exc import IntegrityError
 from werkzeug.security import check_password_hash, generate_password_hash
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadTimeSignature
 
+# Binabasa ang .env (kung meron) bago ang config, para hindi na kailangang
+# i-export ang mga variable sa shell. Sa production, env vars ng host ang gamit.
+load_dotenv()
+
 app = Flask(__name__)
+
+
+def _required_env(name, hint):
+    """Kunin ang env var, o mag-crash nang malinaw kung wala ito."""
+    value = os.environ.get(name)
+    if not value:
+        raise RuntimeError(
+            f"{name} is not set. Add it to your .env file (see .env.example) "
+            f"or to your host's environment variables. {hint}"
+        )
+    return value
+
+
 app.config.update(
-    SECRET_KEY=os.environ.get("SECRET_KEY", "dev-only-change-me"),
-    # Supabase PostgreSQL Direct Connection String (Port 5432 + sslmode=require)
-    SQLALCHEMY_DATABASE_URI=os.environ.get(
+    SECRET_KEY=_required_env(
+        "SECRET_KEY",
+        'Generate one with: python -c "import secrets;print(secrets.token_hex(32))"',
+    ),
+    # Supabase PostgreSQL connection string (sslmode=require para sa Supabase).
+    SQLALCHEMY_DATABASE_URI=_required_env(
         "DATABASE_URL",
-        "postgresql://postgres.pvgztndplyxdoaqvvyhb:ilaymyloveonyou26@aws-1-ap-northeast-1.pooler.supabase.com:6543/postgres"
+        "Example: postgresql://user:password@host:5432/postgres",
     ),
     SQLALCHEMY_ENGINE_OPTIONS={
         "pool_pre_ping": True,
