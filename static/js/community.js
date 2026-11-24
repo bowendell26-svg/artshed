@@ -103,8 +103,8 @@ async function addCommentAjax(event, postId, actionUrl) {
                 commentDiv.id = 'comment-item-' + data.comment_id;
                 commentDiv.className = 'community-comment-item';
 
-                const avatarHtml = data.user_avatar
-                    ? `<img src="/static/uploads/${data.user_avatar}" class="h-7 w-7 rounded-full object-cover">`
+                const avatarHtml = data.user_avatar_url
+                    ? `<img src="${data.user_avatar_url}" class="h-7 w-7 rounded-full object-cover">`
                     : `<div class="h-7 w-7 rounded-full bg-neutral-800 flex items-center justify-center text-xs font-semibold text-brass">${data.user_initials}</div>`;
 
                 commentDiv.innerHTML = `

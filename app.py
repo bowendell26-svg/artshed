@@ -2,6 +2,7 @@
 # 1. IMPORTS AT MGA CONFIGURATION
 # ==========================================
 import hashlib
+import io
 import os
 import re
 import secrets
@@ -13,7 +14,8 @@ from functools import wraps
 
 import click
 from dotenv import load_dotenv
-from flask import Flask, abort, flash, redirect, render_template, request, url_for
+from flask import (Flask, abort, flash, redirect, render_template, request,
+                   send_file, send_from_directory, url_for)
 from flask_login import (LoginManager, UserMixin, current_user, login_required,
                          login_user, logout_user)
 from flask_sqlalchemy import SQLAlchemy
@@ -321,6 +323,21 @@ class Like(db.Model):
     __table_args__ = (db.UniqueConstraint('user_id', 'post_id', name='unique_user_post_reaction'),)
 
 
+class MediaFile(db.Model):
+    """Mga upload (larawan/video) na nakatago sa database, hindi sa disk.
+
+    Panandalian lang ang disk ng Render: tuwing may bagong deploy, nawawala
+    ang lahat ng file sa static/uploads. Sa database, nananatili ang mga ito
+    kahit ilang beses pang mag-update ng app.py.
+    """
+    __tablename__ = "media_file"
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120), unique=True, nullable=False, index=True)
+    mimetype = db.Column(db.String(60), default="application/octet-stream")
+    data = db.Column(db.LargeBinary, nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+
 # ==========================================
 # 3. USER LOADER AT DATABASE MIGRATION CHECK
 # ==========================================
@@ -464,22 +481,60 @@ def safe_next(target):
     return url_for("dashboard")
 
 
+MEDIA_MIMETYPES = {
+    "jpg": "image/jpeg",
+    "jpeg": "image/jpeg",
+    "png": "image/png",
+    "webp": "image/webp",
+    "mp4": "video/mp4",
+    "webm": "video/webm",
+}
+
+
+def store_media(data, ext):
+    """Itago ang file sa database para hindi ito mawala kapag nag-deploy."""
+    name = f"{uuid.uuid4().hex}.{ext}"
+    db.session.add(MediaFile(
+        name=name,
+        mimetype=MEDIA_MIMETYPES.get(ext, "application/octet-stream"),
+        data=data,
+    ))
+    db.session.commit()
+    return name
+
+
 def save_image(file):
     if not file or not file.filename:
         return None
     ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
     if ext not in ALLOWED_EXT:
         raise ValueError("Only JPG, PNG, or WEBP images are accepted.")
-    name = f"{uuid.uuid4().hex}.{ext}"
-    file.save(os.path.join(app.config["UPLOAD_FOLDER"], name))
-    return name
+    return store_media(file.read(), ext)
 
 
 @app.template_global()
 def upload_url(filename):
     if not filename:
         return ""
-    return url_for("static", filename=f"uploads/{filename}")
+    return url_for("media_file", filename=filename)
+
+
+@app.route("/media/<path:filename>")
+def media_file(filename):
+    """Ihain ang upload mula sa database (o sa lumang static/uploads)."""
+    media = db.session.execute(
+        db.select(MediaFile).where(MediaFile.name == filename)
+    ).scalar_one_or_none()
+    if media is not None:
+        response = send_file(
+            io.BytesIO(media.data),
+            mimetype=media.mimetype or "application/octet-stream",
+        )
+    else:
+        # Mga upload na nauna pa sa paglipat sa database.
+        response = send_from_directory(app.config["UPLOAD_FOLDER"], filename)
+    response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    return response
 
 
 def save_post_media(file):
@@ -504,17 +559,23 @@ def save_post_media(file):
         media_type = "video"
     else:
         raise ValueError("Use a JPG, PNG, WEBP, MP4, or WEBM file.")
-    name = f"{uuid.uuid4().hex}.{ext}"
-    file.save(os.path.join(app.config["UPLOAD_FOLDER"], name))
-    return name, media_type
+    return store_media(file.read(), ext), media_type
 
 
 def remove_image(name):
-    if name:
-        try:
-            os.remove(os.path.join(app.config["UPLOAD_FOLDER"], name))
-        except OSError:
-            pass
+    if not name:
+        return
+    media = db.session.execute(
+        db.select(MediaFile).where(MediaFile.name == name)
+    ).scalar_one_or_none()
+    if media is not None:
+        db.session.delete(media)
+        db.session.commit()
+    # Linisin din ang lumang file sa disk, kung meron pa.
+    try:
+        os.remove(os.path.join(app.config["UPLOAD_FOLDER"], name))
+    except OSError:
+        pass
 
 
 def parse_price(raw):
@@ -1005,6 +1066,7 @@ def add_comment(post_id):
                 "content": comment.content,
                 "user_name": current_user.name,
                 "user_avatar": current_user.avatar or '',
+                "user_avatar_url": upload_url(current_user.avatar) if current_user.avatar else '',
                 "user_initials": current_user.initials
             }
             
@@ -1839,8 +1901,7 @@ def upload_cropped_image():
         return {"success": False, "error": "No file uploaded"}, 400
         
     try:
-        name = f"{uuid.uuid4().hex}.jpg"
-        file.save(os.path.join(app.config["UPLOAD_FOLDER"], name))
+        name = store_media(file.read(), "jpg")
         
         if upload_type == "avatar":
             if current_user.avatar:
